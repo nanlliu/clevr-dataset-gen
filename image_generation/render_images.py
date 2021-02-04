@@ -375,15 +375,20 @@ def add_random_objects(scene_struct, num_objects, args, camera):
       for (xx, yy, rr) in positions:
         dx, dy = x - xx, y - yy
         dist = math.sqrt(dx * dx + dy * dy)
-        if dist - r - rr < args.min_dist:
+        if dist <= 0.3:
+          x = xx
+          y = yy
+        dx, dy = x - xx, y - yy
+        dist = math.sqrt(dx * dx + dy * dy)
+        if dist >= 0.1 and dist - r - rr < args.min_dist:
           dists_good = False
           break
-        for direction_name in ['left', 'right', 'front', 'behind']:
+        for direction_name in ['left', 'right', 'front', 'behind', 'above', 'below']:
           direction_vec = scene_struct['directions'][direction_name]
-          assert direction_vec[2] == 0
+          # assert direction_vec[2] == 0
           margin = dx * direction_vec[0] + dy * direction_vec[1]
-          if 0 < margin < args.margin:
-            print(margin, args.margin, direction_name)
+          if dist >= 0.1 and 0 < margin < args.margin:
+            print(dist, margin, args.margin, direction_name)
             print('BROKEN MARGIN!')
             margins_good = False
             break
@@ -410,11 +415,12 @@ def add_random_objects(scene_struct, num_objects, args, camera):
     # Choose random orientation for the object.
     theta = 360.0 * random.random()
 
+    z = height(objects, (x, y))
     # Actually add the object to the scene
-    utils.add_object(args.shape_dir, obj_name, r, (x, y), theta=theta)
+    utils.add_object(args.shape_dir, obj_name, r, (x, y, z + r), theta=theta)
     obj = bpy.context.object
     blender_objects.append(obj)
-    positions.append((x, y, r))
+    positions.append((x, y, z + r))
 
     # Attach a random material
     mat_name, mat_name_out = random.choice(material_mapping)
@@ -424,6 +430,7 @@ def add_random_objects(scene_struct, num_objects, args, camera):
     pixel_coords = utils.get_camera_coords(camera, obj.location)
     objects.append({
       'shape': obj_name_out,
+      'r': r,
       'size': size_name,
       'material': mat_name_out,
       '3d_coords': tuple(obj.location),
@@ -442,7 +449,22 @@ def add_random_objects(scene_struct, num_objects, args, camera):
       utils.delete_object(obj)
     return add_random_objects(scene_struct, num_objects, args, camera)
 
+  for obj in objects:
+    print(obj['shape'], obj['color'])
   return objects, blender_objects
+
+
+def height(objects, pos):
+  x, y = pos
+  z = 0
+  for obj in objects:
+    obj_x, obj_y, _ = obj['3d_coords']
+    dx, dy = x - obj_x, y - obj_y
+    dist = math.sqrt(dx * dx + dy * dy)
+    print('dist', dist)
+    if dist <= 0.1:
+      z += obj['r'] * 2
+  return z
 
 
 def compute_all_relationships(scene_struct, eps=0.2):
@@ -456,7 +478,7 @@ def compute_all_relationships(scene_struct, eps=0.2):
   """
   all_relationships = {}
   for name, direction_vec in scene_struct['directions'].items():
-    if name == 'above' or name == 'below': continue
+    # if name == 'above' or name == 'below': continue
     all_relationships[name] = []
     for i, obj1 in enumerate(scene_struct['objects']):
       coords1 = obj1['3d_coords']
@@ -467,7 +489,11 @@ def compute_all_relationships(scene_struct, eps=0.2):
         diff = [coords2[k] - coords1[k] for k in [0, 1, 2]]
         dot = sum(diff[k] * direction_vec[k] for k in [0, 1, 2])
         if dot > eps:
-          related.add(j)
+          if name == 'above' or name == 'below':
+            if coords1[0] == coords2[0] and coords1[1] == coords2[1]:
+              related.add(j)
+          else:
+            related.add(j)
       all_relationships[name].append(sorted(list(related)))
   return all_relationships
 
