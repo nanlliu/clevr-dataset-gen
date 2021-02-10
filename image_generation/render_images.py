@@ -33,7 +33,7 @@ if INSIDE_BLENDER:
     import utils
   except ImportError as e:
     print("\nERROR")
-    print("Running render_images.py from Blender and cannot import utils.py.") 
+    print("Running render_images.py from Blender and cannot import utils.py.")
     print("You may need to add a .pth file to the site-packages of Blender's")
     print("bundled python with a command like this:\n")
     print("echo $PWD >> $BLENDER/$VERSION/python/lib/python3.5/site-packages/clevr.pth")
@@ -268,9 +268,10 @@ def render_scene(args,
     return 2.0 * L * (random.random() - 0.5)
 
   # Add random jitter to camera position
-  if args.camera_jitter > 0:
-    for i in range(3):
-      bpy.data.objects['Camera'].location[i] += rand(args.camera_jitter)
+  # if args.camera_jitter > 0:
+  bpy.data.objects['Camera'].location[0] += -2
+  bpy.data.objects['Camera'].location[1] += 0.5
+  bpy.data.objects['Camera'].location[2] += 0.15
 
   # Figure out the left, up, and behind directions along the plane and record
   # them in the scene structure
@@ -366,8 +367,8 @@ def add_random_objects(scene_struct, num_objects, args, camera):
         for obj in blender_objects:
           utils.delete_object(obj)
         return add_random_objects(scene_struct, num_objects, args, camera)
-      x = random.uniform(-3, 3)
-      y = random.uniform(-3, 3)
+      x = random.uniform(-2.5, 2.5)
+      y = random.uniform(-2.5, 2.5)
       # Check to make sure the new object is further than min_dist from all
       # other objects, and further than margin along the four cardinal directions
       dists_good = True
@@ -375,7 +376,7 @@ def add_random_objects(scene_struct, num_objects, args, camera):
       for (xx, yy, rr) in positions:
         dx, dy = x - xx, y - yy
         dist = math.sqrt(dx * dx + dy * dy)
-        if dist <= 0.3:
+        if dist <= 0.5 and random.random() <= 0.5:
           x = xx
           y = yy
         dx, dy = x - xx, y - yy
@@ -395,7 +396,8 @@ def add_random_objects(scene_struct, num_objects, args, camera):
         if not margins_good:
           break
 
-      if dists_good and margins_good:
+      num, z = height(objects, (x, y))
+      if dists_good and margins_good and num <= 2:
         break
 
     # Choose random color and shape
@@ -457,14 +459,16 @@ def add_random_objects(scene_struct, num_objects, args, camera):
 def height(objects, pos):
   x, y = pos
   z = 0
+  num = 0
   for obj in objects:
     obj_x, obj_y, _ = obj['3d_coords']
     dx, dy = x - obj_x, y - obj_y
     dist = math.sqrt(dx * dx + dy * dy)
-    print('dist', dist)
+    # print('dist', dist)
     if dist <= 0.1:
       z += obj['r'] * 2
-  return z
+      num += 1
+  return num, z
 
 
 def compute_all_relationships(scene_struct, eps=0.2):
@@ -488,12 +492,12 @@ def compute_all_relationships(scene_struct, eps=0.2):
         coords2 = obj2['3d_coords']
         diff = [coords2[k] - coords1[k] for k in [0, 1, 2]]
         dot = sum(diff[k] * direction_vec[k] for k in [0, 1, 2])
-        if dot > eps:
-          if name == 'above' or name == 'below':
-            if coords1[0] == coords2[0] and coords1[1] == coords2[1]:
-              related.add(j)
-          else:
+        if name == 'above' or name == 'below':
+          if abs(coords1[0] - coords2[0]) <= 0.2 and abs(coords1[1] - coords2[1]) <= 0.2:
             related.add(j)
+        else:
+          if dot > eps:
+              related.add(j)
       all_relationships[name].append(sorted(list(related)))
   return all_relationships
 
